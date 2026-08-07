@@ -1,0 +1,4 @@
+OT-Infra.avgol.com {
+    tls internal 
+    reverse_proxy checkmk:80
+}

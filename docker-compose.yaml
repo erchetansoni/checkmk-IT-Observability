@@ -19,7 +19,7 @@ services:
     stop_grace_period: 60s 
 
     ports:
-      - "80:5000"       # Required: Web interface (Change 80 to another port if needed) 
+      # - "80:5000"       # Required: Web interface (Change 80 to another port if needed) 
       - "8000:8000"     # Required: Agent Receiver
       - "162:162/udp"   # Optional: SNMP Trap receiver
       - "514:514/udp"   # Optional: Syslog receiver
@@ -34,6 +34,15 @@ services:
       - TZ=Asia/Kolkata
       - CMK_PASSWORD=ChangeMe123!         # Sets the default username as "cmkadmin" with password as "ChangeMe123!".
       - CMK_SITE_ID=monitoring            # The name of your monitoring site
+      
+      # For mail notifications
+      - MAIL_RELAY_HOST=postfix
+      # - MAIL_RELAY_PORT=587
+      # - MAIL_RELAY_USERNAME=your-email@gmail.com
+      # - MAIL_RELAY_PASSWORD=your-password
+      # - MAIL_FROM=your-email@gmail.com
+      # - MAIL_TO=your-email@gmail.com
+      
 
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000"]
@@ -48,5 +57,27 @@ services:
         max-size: "10m"
         max-file: "5"
 
+  caddy:
+    image: caddy:latest
+    container_name: caddy
+    hostname: caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - checkmk
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
 volumes:
   checkmk_data:
+  caddy_data:
+  caddy_config:
