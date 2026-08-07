@@ -1,0 +1,31 @@
+# Environment / secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors / IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+logs/
+
+# Local bind-mount data (only relevant if volumes are switched from named to bind mounts)
+checkmk_data/
+caddy_data/
+caddy_config/
+
+# Backups / temp files
+*.bak
+*.tmp
