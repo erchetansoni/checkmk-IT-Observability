@@ -34,13 +34,12 @@ services:
       - CMK_PASSWORD=ChangeMe123!         # Sets the default username as "cmkadmin" with password as "ChangeMe123!".
       - CMK_SITE_ID=monitoring            # The name of your monitoring site
       
-      # For mail notifications (uncomment and set a real relay host/service — "postfix" is not defined in this compose file)
-      # - MAIL_RELAY_HOST=postfix
-      # - MAIL_RELAY_PORT=587
-      # - MAIL_RELAY_USERNAME=your-email@gmail.com
-      # - MAIL_RELAY_PASSWORD=your-password
-      # - MAIL_FROM=your-email@gmail.com
-      # - MAIL_TO=your-email@gmail.com
+      # Mail notifications: this image only supports MAIL_RELAY_HOST, and it is an
+      # UNAUTHENTICATED smarthost only (no username/password support at this level).
+      # For an authenticated relay like Office 365, do NOT use this variable — instead
+      # configure SMTP auth directly in the Web UI:
+      # Setup > Events > Notifications > Parameters for notification methods > HTML Email
+      # - MAIL_RELAY_HOST=mailrelay.example.com
       
 
     healthcheck:
