@@ -49,7 +49,15 @@ Caddy only proxies the web UI (HTTP/HTTPS). The Agent Receiver, SNMP trap, and S
 | `TZ` | Container timezone |
 | `CMK_PASSWORD` | Initial `cmkadmin` password — **change this** |
 | `CMK_SITE_ID` | Name of the Checkmk monitoring site |
-| `MAIL_RELAY_HOST` / `MAIL_RELAY_PORT` / `MAIL_RELAY_USERNAME` / `MAIL_RELAY_PASSWORD` / `MAIL_FROM` / `MAIL_TO` | Optional SMTP relay settings for notifications (commented out by default — no relay is defined in this stack) |
+| `MAIL_RELAY_HOST` | Optional, **unauthenticated** SMTP smarthost for outbound mail (commented out by default). Not usable with providers that require authentication, such as Office 365. |
+
+### Email notifications with authenticated SMTP (e.g. Office 365)
+
+There is no environment variable for authenticated mail relay in this image. Instead, configure it directly in the Checkmk Web UI, where the HTML Email notification method supports a smarthost with authentication and STARTTLS:
+
+`Setup > Events > Notifications > Parameters for notification methods > HTML Email`
+
+Enter the smarthost (`smtp.office365.com`, port `587`, STARTTLS), enable authentication, and provide the sending mailbox's credentials. Note that Microsoft disables SMTP AUTH on mailboxes by default — it must be explicitly enabled for the sending account in the Microsoft 365 admin center (`Users > Active users > <account> > Mail > Manage email apps > Authenticated SMTP`) before this will work.
 
 ## Ports
 
