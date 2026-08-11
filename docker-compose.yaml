@@ -80,6 +80,40 @@ services:
         max-size: "10m"
         max-file: "5"
 
+  #####################################################
+  # SMTP Relay (Gmail)
+  # For Reference: https://www.postfix.org/postconf.5.html
+  # Docker Hub: https://hub.docker.com/r/boky/postfix
+  #####################################################
+
+  mailrelay:
+    image: boky/postfix
+    container_name: mailrelay
+    hostname: mailrelay
+    restart: unless-stopped
+
+    environment:
+      # SMTP Server
+      RELAYHOST : [smtp.office365.com]:587
+
+      RELAYHOST_TLS_LEVEL: "may"
+
+      # Account
+      RELAYHOST_USERNAME: "YOUR_EMAIL@example.com"
+
+      # Account Password
+      RELAYHOST_PASSWORD: "YOUR_PASSWORD"
+
+      # Allowed sender domain
+      ALLOWED_SENDER_DOMAINS: "*"
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+
 volumes:
   checkmk_data:
   caddy_data:
