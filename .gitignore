@@ -23,9 +23,12 @@ logs/
 
 # Local bind-mount data (only relevant if volumes are switched from named to bind mounts)
 checkmk_data/
-caddy_data/
 caddy_config/
+caddy_cert/
 
 # Backups / temp files
 *.bak
 *.tmp
+
+# Bundle directory
+OT-Monitoring_bundle/

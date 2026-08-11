@@ -67,7 +67,7 @@ services:
     
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile
-      - caddy_data:/data
+      - ./caddy_cert:/data
       - caddy_config:/config
     
     depends_on:
@@ -94,7 +94,7 @@ services:
 
     environment:
       # SMTP Server
-      RELAYHOST : [smtp.office365.com]:587
+      RELAYHOST : "[smtp.office365.com]:587"
 
       RELAYHOST_TLS_LEVEL: "may"
 
@@ -116,5 +116,4 @@ services:
 
 volumes:
   checkmk_data:
-  caddy_data:
   caddy_config:
