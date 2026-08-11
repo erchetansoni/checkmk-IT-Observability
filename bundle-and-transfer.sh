@@ -32,6 +32,7 @@ REMOTE_PATH="/home/chetan/OT-Monitoring"
 FILES_TO_COPY=(
     "docker-compose.yaml"
     "Caddyfile"
+    "deploy-on-server.sh"
 )
 
 # Subdirectories to copy
