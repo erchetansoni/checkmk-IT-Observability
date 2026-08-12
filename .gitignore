@@ -25,6 +25,7 @@ logs/
 checkmk_data/
 caddy_config/
 caddy_cert/
+backup-files/
 
 # Backups / temp files
 *.bak
