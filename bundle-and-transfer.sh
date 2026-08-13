@@ -31,7 +31,6 @@ REMOTE_PATH="/home/chetan/OT-Monitoring"
 
 FILES_TO_COPY=(
     "docker-compose.yaml"
-    "Caddyfile"
     "deploy-on-server.sh"
 )
 
@@ -47,7 +46,13 @@ FILES_TO_COPY=(
 # )
 
 DIRS_TO_COPY=(
-    "caddy_cert"
+    "traefik"
+)
+
+REQUIRED_FILES=(
+    "traefik/tls.yaml"
+    "traefik/certs/wildcard_.avgol.com.crt"
+    "traefik/certs/wildcard_.avgol.com.key"
 )
 
 ##############################################
@@ -63,6 +68,17 @@ do
 done
 
 docker compose version >/dev/null
+
+for FILE in "${REQUIRED_FILES[@]}"
+do
+    if [ ! -f "$FILE" ]; then
+        echo "ERROR: required file missing:"
+        echo "  $FILE"
+        echo
+        echo "Run: python scripts/generate-traefik-cert.py"
+        exit 1
+    fi
+done
 
 ##############################################
 # PREPARE BUNDLE
@@ -259,5 +275,5 @@ echo
 echo " Next Steps:"
 echo "   ssh ${REMOTE_USER}@${REMOTE_HOST}"
 echo "   cd ${REMOTE_PATH}"
-echo "   ./deploy.sh"
+echo "   ./deploy-on-server.sh"
 echo "========================================="

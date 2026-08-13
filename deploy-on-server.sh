@@ -15,9 +15,9 @@ COMPOSE_FILE="docker-compose.yaml"
 # If any is missing, Docker would create it as an empty directory
 # and the container would silently run with default config.
 REQUIRED_FILES=(
-    # "mosquitto/mosquitto.conf"
-    # "telegraf/telegraf.conf"
-    # "pgbouncer/pgbouncer.ini"
+    "traefik/tls.yaml"
+    "traefik/certs/wildcard_.avgol.com.crt"
+    "traefik/certs/wildcard_.avgol.com.key"
 )
 
 #########################################
