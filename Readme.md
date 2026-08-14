@@ -8,6 +8,7 @@ A Docker Compose stack that runs [Checkmk](https://checkmk.com/) Raw Edition for
                  +--------------------+
   HTTPS (443) -> |      Traefik       | -> checkmk:5000  (Web UI)
   HTTP  (80) ->  |  reverse proxy     |    HTTP redirects to HTTPS
+  UI   (8080) -> |  (Dashboard/API)   |
                  +--------------------+
 
   Agents ---------------------> checkmk:8000     (Agent Receiver)
@@ -15,17 +16,17 @@ A Docker Compose stack that runs [Checkmk](https://checkmk.com/) Raw Edition for
   Syslog ---------------------> checkmk:514/udp  (Syslog receiver)
 ```
 
-Traefik only proxies the web UI. The Agent Receiver, SNMP trap, and Syslog ports are published directly on the host because they are not HTTP services.
+Traefik proxies the Checkmk web UI and serves its own Traefik Dashboard Web UI. The Agent Receiver, SNMP trap, and Syslog ports are published directly on the host because they are not HTTP services.
 
 ## Prerequisites
 
 - Docker Engine and the Docker Compose plugin
-- A DNS or hosts-file record pointing the monitoring domain at this host
-- For local testing on this machine:
+- DNS or hosts-file records pointing the domains at this host:
   ```text
   IN-OT-Monitoring.avgol.com  127.0.0.1
+  in-ot-proxy.avgol.com       127.0.0.1  (Traefik Web UI / Proxy)
   ```
-- Inbound firewall access to ports `80`, `443`, `8000/tcp`, `162/udp`, and `514/udp` as needed
+- Inbound firewall access to ports `80`, `443`, `8080/tcp`, `8000/tcp`, `162/udp`, and `514/udp` as needed
 - A trusted local root CA if you want the browser to trust local HTTPS
 
 Host names are case-insensitive. The Traefik rule in `docker-compose.yaml` uses `in-ot-monitoring.avgol.com`, which matches `IN-OT-Monitoring.avgol.com`.
@@ -87,13 +88,55 @@ Enter the smarthost (`smtp.office365.com`, port `587`, STARTTLS), enable authent
 
 | Port | Protocol | Purpose | Exposed via |
 |---|---|---|---|
-| 443 | TCP | Web UI (HTTPS) | Traefik |
+| 443 | TCP | Checkmk Web UI (HTTPS) / Traefik UI | Traefik |
 | 80 | TCP | HTTP redirect to HTTPS | Traefik |
+| 8080 | TCP | Traefik Web UI / Dashboard | Traefik |
 | 8000 | TCP | Agent Receiver | Direct host port |
 | 162 | UDP | SNMP Trap receiver | Direct host port |
 | 514 | UDP | Syslog receiver | Direct host port |
 
 The Checkmk server also initiates outbound connections to agents on TCP `6556`; it does not listen on that port itself.
+
+## Traefik Configuration
+
+Traefik uses file-based static configuration in `traefik/traefik.yaml` mounted to `/etc/traefik/traefik.yaml`:
+
+```yaml
+global:
+  checkNewVersion: false
+  sendAnonymousUsage: false
+
+log:
+  level: INFO
+
+api:
+  dashboard: true
+  insecure: true
+
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+  websecure:
+    address: ":443"
+  traefik:
+    address: ":8080"
+
+providers:
+  docker:
+    exposedByDefault: false
+  file:
+    filename: /etc/traefik/dynamic/tls.yaml
+    watch: true
+```
+
+The Traefik Dashboard Web UI can be accessed at:
+- `http://in-ot-proxy.avgol.com:8080/dashboard/` (or `http://localhost:8080/dashboard/`)
+- `https://in-ot-proxy.avgol.com/dashboard/` (via HTTPS TLS on port 443)
 
 ## Local TLS Certificate
 
@@ -104,6 +147,24 @@ tls:
   certificates:
     - certFile: /certs/wildcard_.avgol.com.crt
       keyFile: /certs/wildcard_.avgol.com.key
+
+http:
+  routers:
+    traefik-dashboard:
+      rule: Host(`in-ot-proxy.avgol.com`)
+      entryPoints:
+        - websecure
+      service: api@internal
+      middlewares:
+        - dashboard-redirect
+      tls: {}
+
+  middlewares:
+    dashboard-redirect:
+      redirectRegex:
+        regex: "^https://in-ot-proxy\\.avgol\\.com/$"
+        replacement: "https://in-ot-proxy.avgol.com/dashboard/"
+        permanent: true
 ```
 
 The corresponding local certificate files live in `traefik/certs/`:
@@ -157,6 +218,7 @@ docker compose pull
 
 The deployment script verifies these required bind-mounted files before starting Docker Compose:
 
+- `traefik/traefik.yaml`
 - `traefik/tls.yaml`
 - `traefik/certs/wildcard_.avgol.com.crt`
 - `traefik/certs/wildcard_.avgol.com.key`
