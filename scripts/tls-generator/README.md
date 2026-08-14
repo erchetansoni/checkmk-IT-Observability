@@ -87,6 +87,43 @@ If you need to clean up and remove the Root CA from test PCs:
 
 ---
 
+## 4. Certificate Renewal & Expiry Management
+
+### Scenario A: When the Server Certificate is Near Expiry (~Every 5 Years)
+
+Since your **Root CA remains valid**, renewing the server certificate is simple and requires **no action on client PCs**.
+
+1. **Run the generator script on the server:**
+   * **Linux Server:** `cd scripts/tls-generator/server && ./generate-certs.sh`
+   * **Windows Server:** `cd .\scripts\tls-generator\server; .\generate-certs.ps1`
+2. **What happens:** The script reuses the existing Root CA in `ca-store/` and generates a fresh 5-year server certificate in `output/`.
+3. **Deploy:** Copy `wildcard_.avgol.com.crt` and `wildcard_.avgol.com.key` from `output/` into `traefik/certs/`. Traefik automatically hot-reloads it.
+4. **Client Action:** **None.** Client browsers already trust the Root CA and will seamlessly accept the renewed certificate.
+
+---
+
+### Scenario B: When the Root CA is Near Expiry (~Every 10 Years)
+
+When the 10-year master Root CA is expiring, a new Root CA must be created and distributed to client machines:
+
+1. **Clear old CA store:** Delete or back up `ca-store/rootCA.key` and `ca-store/rootCA.crt`.
+2. **Run generator script on server:**
+   * Run `generate-certs.sh` (Linux) or `generate-certs.ps1` (Windows).
+   * Because `ca-store/` is empty, the script generates a **brand new 10-year Root CA** and a new server certificate.
+3. **Deploy to Traefik:** Copy new server certificate & key from `output/` into `traefik/certs/`.
+4. **Deploy to Client PCs (Required):** Install the new `rootCA.crt` (found in `client/`) on all client workstations using `install-ca-windows.ps1` or `install-ca-linux.sh` (or deploy domain-wide via Active Directory GPO).
+
+---
+
+### Quick Expiry Reference
+
+| Expiry Event | Frequency | Action on Server | Action on Client PCs |
+| :--- | :--- | :--- | :--- |
+| **Server Certificate** | Every 5 Years | Run `generate-certs` script & copy to `traefik/certs/` | **None** (Transparent to clients) |
+| **Root CA Certificate** | Every 10 Years | Clear `ca-store/`, run `generate-certs` & copy to `traefik/certs/` | Run `install-ca` script on PCs (or push via GPO) |
+
+---
+
 ## Variables & Concepts Explained
 
 ### 1. Root CA vs. Server Certificate Validity
