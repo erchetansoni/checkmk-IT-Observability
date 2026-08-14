@@ -1,14 +1,99 @@
+################################################################################
+# Checkmk Dynamic Routing Configuration for Traefik
+# 
+# Covers:
+# 1. HTTP/HTTPS: Checkmk Web UI (Port 5000 -> 443 HTTPS via Host matching)
+# 2. TCP: Checkmk Agent Receiver (Port 8000 TCP pass-through)
+# 3. UDP: Checkmk SNMP Traps (Port 162 UDP) & Syslog (Port 514 UDP)
+################################################################################
+
+# ==============================================================================
+# 1. HTTP / HTTPS ROUTING (Layer 7)
+# ==============================================================================
+# In HTTP/HTTPS, Traefik uses the domain name (Host header) to route traffic.
+# This allows multiple websites/subdomains to share the same port 443.
 http:
   routers:
+    # Router for Checkmk Web Interface
     ot-monitoring:
+      # Match requests where the browser requests "in-ot-monitoring.avgol.com"
       rule: Host(`in-ot-monitoring.avgol.com`)
+      # Listen on HTTPS entryPoint (port 443)
       entryPoints:
         - websecure
+      # Forward matched traffic to the ot-monitoring-service backend defined below
       service: ot-monitoring-service
+      # Enable TLS encryption (automatically uses wildcard *.avgol.com certificate)
       tls: {}
 
   services:
+    # Backend service definition for Checkmk Web UI
     ot-monitoring-service:
       loadBalancer:
         servers:
+          # Targets container hostname "checkmk" on internal port 5000
           - url: "http://checkmk:5000"
+
+
+# ==============================================================================
+# 2. TCP ROUTING (Layer 4)
+# ==============================================================================
+# Used for raw TCP connections such as the Checkmk Agent Receiver on port 8000.
+tcp:
+  routers:
+    # Router for Checkmk Agent Receiver
+    agent-receiver:
+      # HostSNI(`*`) accepts all incoming TCP connections on this entrypoint
+      rule: HostSNI(`*`)
+      # Listen on the agent-receiver entryPoint (port 8000 TCP)
+      entryPoints:
+        - agent-receiver
+      # Forward to the backend service defined below
+      service: agent-receiver-service
+
+  services:
+    # Backend service for Checkmk Agent Receiver
+    agent-receiver-service:
+      loadBalancer:
+        servers:
+          # Forwards raw TCP traffic to the checkmk container on port 8000
+          - address: "checkmk:8000"
+
+
+# ==============================================================================
+# 3. UDP ROUTING (Layer 4)
+# ==============================================================================
+# UDP datagrams are connectionless and do not have Host headers or SNI.
+# Traefik routes UDP directly from entryPoint port to backend service port.
+udp:
+  routers:
+    # Router for SNMP Traps (Port 162 UDP)
+    snmp-trap:
+      # Listen on the snmp-trap entryPoint (port 162/udp)
+      entryPoints:
+        - snmp-trap
+      # Forward to the SNMP service defined below
+      service: snmp-trap-service
+
+    # Router for Syslog Events (Port 514 UDP)
+    syslog:
+      # Listen on the syslog entryPoint (port 514/udp)
+      entryPoints:
+        - syslog
+      # Forward to the Syslog service defined below
+      service: syslog-service
+
+  services:
+    # Backend service for Checkmk SNMP Trap Receiver
+    snmp-trap-service:
+      loadBalancer:
+        servers:
+          # Forwards UDP packets to the checkmk container on port 162
+          - address: "checkmk:162"
+
+    # Backend service for Checkmk Syslog Receiver
+    syslog-service:
+      loadBalancer:
+        servers:
+          # Forwards UDP packets to the checkmk container on port 514
+          - address: "checkmk:514"

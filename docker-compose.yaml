@@ -17,11 +17,13 @@ services:
     restart: unless-stopped
     stop_grace_period: 60s 
 
-    ports:
-      # - "80:5000"       # Required: Web interface (Change 80 to another port if needed) 
-      - "8000:8000"     # Required: Agent Receiver
-      - "162:162/udp"   # Optional: SNMP Trap receiver
-      - "514:514/udp"   # Optional: Syslog receiver
+    # Ports are no longer published directly from Checkmk.
+    # All inbound traffic (HTTP/HTTPS, Agent Receiver 8000 TCP, SNMP 162 UDP, Syslog 514 UDP)
+    # is routed through Traefik reverse proxy.
+    # ports:
+    #   - "8000:8000"     # Routed via Traefik
+    #   - "162:162/udp"   # Routed via Traefik
+    #   - "514:514/udp"   # Routed via Traefik
     volumes:
       - ./backup-files:/home/backup-files
       - ./checkmk_data:/omd/sites
@@ -62,9 +64,14 @@ services:
     restart: unless-stopped
 
     ports:
-      - "80:80"
-      - "443:443"
-      - "8080:8080"
+      # HTTP & HTTPS
+      - "80:80"             # HTTP (redirects to HTTPS)
+      - "443:443"           # HTTPS Web UI & Traefik Dashboard
+      - "8080:8080"         # Traefik Internal API / Dashboard
+      # Layer 4 TCP & UDP Proxied Services
+      - "8000:8000"         # Checkmk Agent Receiver (TCP)
+      - "162:162/udp"       # Checkmk SNMP Trap Receiver (UDP)
+      - "514:514/udp"       # Checkmk Syslog Receiver (UDP)
     
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro

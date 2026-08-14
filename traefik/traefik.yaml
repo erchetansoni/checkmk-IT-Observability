@@ -31,6 +31,12 @@ api:
 # address: ":443": Binds and listens on port 443 for all secure TLS traffic.
 # traefik:: The internal entry point name for Traefik’s management interface.
 # address: ":8080": Binds and listens on port 8080 for the dashboard and API.
+# agent-receiver:: Checkmk Agent Receiver entry point (TCP).
+# address: ":8000": Listens on TCP port 8000 for Checkmk agent registration & data.
+# snmp-trap:: SNMP Trap Receiver entry point (UDP).
+# address: ":162/udp": Listens on UDP port 162 for incoming SNMP traps from network devices.
+# syslog:: Syslog Receiver entry point (UDP).
+# address: ":514/udp": Listens on UDP port 514 for syslog events from network switches & servers.
 entryPoints:
   web:
     address: ":80"
@@ -43,6 +49,12 @@ entryPoints:
     address: ":443"
   traefik:
     address: ":8080"
+  agent-receiver:
+    address: ":8000"
+  snmp-trap:
+    address: ":162/udp"
+  syslog:
+    address: ":514/udp"
 
 # providers:: Section defining where Traefik discovers routing configuration.
 # docker:: Enables discovery from the Docker socket (/var/run/docker.sock).

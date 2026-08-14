@@ -1,40 +1,99 @@
 # Checkmk Monitoring Stack
 
-A Docker Compose stack that runs [Checkmk](https://checkmk.com/) Raw Edition for infrastructure monitoring, fronted by [Traefik](https://traefik.io/traefik/) `v3.7.10` as the HTTPS reverse proxy.
+A Docker Compose stack that runs [Checkmk](https://checkmk.com/) Raw Edition for infrastructure monitoring, fronted by [Traefik](https://traefik.io/traefik/) `v3.7.10` as the reverse proxy for HTTP/HTTPS, TCP, and UDP traffic.
 
 ## Architecture
 
 ```text
-                 +--------------------+
-  HTTPS (443) -> |      Traefik       | -> checkmk:5000  (Web UI)
-  HTTP  (80) ->  |  reverse proxy     |    HTTP redirects to HTTPS
-  UI   (8080) -> |  (Dashboard/API)   |
-                 +--------------------+
-
-  Agents ---------------------> checkmk:8000     (Agent Receiver)
-  SNMP traps -----------------> checkmk:162/udp  (SNMP Trap receiver)
-  Syslog ---------------------> checkmk:514/udp  (Syslog receiver)
+                 +-------------------------------------------------------------+
+                 |                           Traefik                           |
+                 |                        Reverse Proxy                        |
+                 +-------------------------------------------------------------+
+  HTTPS (443)    |  Host(`in-ot-monitoring.avgol.com`) -> checkmk:5000 (Web UI)|
+  HTTP  (80)     |  HTTP redirects automatically to HTTPS (443)                |
+  UI    (8080)   |  Host(`in-ot-proxy.avgol.com`)      -> Traefik Dashboard   |
+  TCP   (8000)   |  Agent Receiver                     -> checkmk:8000 (TCP)   |
+  UDP   (162)    |  SNMP Trap Receiver                 -> checkmk:162  (UDP)   |
+  UDP   (514)    |  Syslog Receiver                    -> checkmk:514  (UDP)   |
+                 +-------------------------------------------------------------+
 ```
 
-Traefik proxies the Checkmk web UI and serves its own Traefik Dashboard Web UI. The Agent Receiver, SNMP trap, and Syslog ports are published directly on the host because they are not HTTP services.
+All incoming connections (Web UI, Agent Receiver, SNMP traps, and Syslog) pass through Traefik. Checkmk does not expose any ports directly to the host.
 
-## Prerequisites
+---
 
-- Docker Engine and the Docker Compose plugin
-- DNS or hosts-file records pointing the domains at this host:
-  ```text
-  IN-OT-Monitoring.avgol.com  127.0.0.1
-  in-ot-proxy.avgol.com       127.0.0.1  (Traefik Web UI / Proxy)
-  ```
-- Inbound firewall access to ports `80`, `443`, `8080/tcp`, `8000/tcp`, `162/udp`, and `514/udp` as needed
-- A trusted local root CA if you want the browser to trust local HTTPS
+## Domain & DNS Configuration
 
-Host names are case-insensitive. The Traefik rule in `docker-compose.yaml` uses `in-ot-monitoring.avgol.com`, which matches `IN-OT-Monitoring.avgol.com`.
+### 1. Production DNS Setup (Enterprise Network)
+In production, your corporate DNS server (e.g. Active Directory DNS, Infoblox, or BIND) must have **A Records** (or a wildcard DNS record) pointing to the **Traefik Server's IP address**:
+
+| Hostname / Record | Type | Target IP | Purpose |
+|---|---|---|---|
+| `in-ot-monitoring.avgol.com` | `A` | `<SERVER_IP>` | Checkmk Web UI |
+| `in-ot-proxy.avgol.com` | `A` | `<SERVER_IP>` | Traefik Proxy Dashboard |
+| `in-ot-agent.avgol.com` | `A` | `<SERVER_IP>` | Checkmk Agent Receiver (TCP 8000) |
+| `in-ot-snmp.avgol.com` | `A` | `<SERVER_IP>` | SNMP Trap Receiver (UDP 162) |
+| `in-ot-syslog.avgol.com` | `A` | `<SERVER_IP>` | Syslog Receiver (UDP 514) |
+| `*.avgol.com` *(Alternative)* | `A` | `<SERVER_IP>` | Wildcard DNS covering all subdomains |
+
+### 2. Local Testing (Hosts File)
+For local development or pre-production testing on your machine, add the following lines to your `hosts` file:
+* **Windows:** `C:\Windows\System32\drivers\etc\hosts`
+* **Linux/macOS:** `/etc/hosts`
+
+```text
+127.0.0.1  in-ot-monitoring.avgol.com
+127.0.0.1  in-ot-proxy.avgol.com
+127.0.0.1  in-ot-agent.avgol.com
+127.0.0.1  in-ot-snmp.avgol.com
+127.0.0.1  in-ot-syslog.avgol.com
+```
+
+---
+
+## Ports Overview
+
+All external ports are bound by the `traefik` container:
+
+| Port | Protocol | Purpose | Layer | Handled by |
+|---|---|---|---|---|
+| **443** | TCP | Checkmk Web UI (HTTPS) / Traefik Dashboard | Layer 7 (HTTP/TLS) | Traefik Router (`websecure`) |
+| **80** | TCP | HTTP redirect to HTTPS | Layer 7 (HTTP) | Traefik Entrypoint (`web`) |
+| **8080** | TCP | Traefik Internal API / Dashboard | Layer 7 (HTTP) | Traefik Dashboard (`insecure`) |
+| **8000** | TCP | Checkmk Agent Receiver | Layer 4 (TCP) | Traefik TCP Proxy (`agent-receiver`) |
+| **162** | UDP | SNMP Trap Receiver | Layer 4 (UDP) | Traefik UDP Proxy (`snmp-trap`) |
+| **514** | UDP | Syslog Receiver | Layer 4 (UDP) | Traefik UDP Proxy (`syslog`) |
+
+> [!NOTE]
+> The Checkmk server also initiates outbound connections to agents on TCP `6556`; it does not listen on that port itself.
+
+---
+
+## Directory Structure
+
+```text
+OT-Monitoring/
+├── docker-compose.yaml                   # Container orchestration
+├── deploy-on-server.sh                   # Deployment script for production host
+├── bundle-and-transfer.sh                # Offline packaging and upload script
+├── checkmk_data/                         # Checkmk persistent site data
+├── backup-files/                         # Checkmk automated backups
+└── traefik/
+    ├── traefik.yaml                      # Traefik static configuration (Entrypoints & Providers)
+    ├── certs/
+    │   ├── wildcard_.avgol.com.crt       # Public SSL certificate (*.avgol.com)
+    │   └── wildcard_.avgol.com.key       # Private key
+    └── dynamic/                          # Dynamic configuration folder (Hot-reloaded)
+        ├── tls.yaml                      # TLS certificates & Traefik Dashboard route
+        └── in-ot-monitoring.avgol.com.yaml # Checkmk HTTP, TCP & UDP routing rules
+```
+
+---
 
 ## Quick Start
 
-1. Edit `docker-compose.yaml` and change `CMK_PASSWORD` to something other than the default.
-2. Make sure the Traefik certificate files exist:
+1. Edit `docker-compose.yaml` and set your desired `CMK_PASSWORD`.
+2. Ensure the Traefik wildcard SSL certificates exist:
    ```powershell
    python .\scripts\generate-traefik-cert.py
    ```
@@ -42,23 +101,65 @@ Host names are case-insensitive. The Traefik rule in `docker-compose.yaml` uses 
    ```bash
    docker compose up -d
    ```
-4. Watch the logs until Checkmk finishes initializing. First boot can take a couple of minutes:
+4. Watch logs until Checkmk finishes initializing:
    ```bash
    docker compose logs -f checkmk traefik
    ```
-5. Open `https://IN-OT-Monitoring.avgol.com/monitoring/` and log in with:
-   - **User:** `cmkadmin`
-   - **Password:** whatever you set in `CMK_PASSWORD`
+5. Open `https://in-ot-monitoring.avgol.com/monitoring/` and log in:
+   - **Username:** `cmkadmin`
+   - **Password:** whatever was set in `CMK_PASSWORD` (default: `ChangeMe123!`)
 
-> Checkmk serves its UI under a site path (`/monitoring/` by default, matching `CMK_SITE_ID`), not the bare domain root.
+---
 
-## Traefik Routing
+## Registering Monitored Hosts (Agent Controller)
 
-Traefik uses dynamic configuration files loaded from `traefik/dynamic/` (hot-reloaded automatically).
+Checkmk 2.1+ uses TLS encryption between the Checkmk Agent on target hosts and the Checkmk Agent Receiver (`in-ot-agent.avgol.com` on port 8000).
 
-The Checkmk service is defined in `traefik/dynamic/in-ot-monitoring.avgol.com.yaml`:
+After installing the Checkmk agent package on your target Windows or Linux server, register it with the monitoring server:
+
+### Windows Agent Registration
+
+Run Command Prompt(use the caret `^` for escaping special characters) or PowerShell(use the backtick `  for escaping special characters) as **Administrator**:
+
+```bat
+cd "C:\Program Files (x86)\checkmk\service"
+
+cmk-agent-ctl.exe register ^
+  --server in-ot-agent.avgol.com ^
+  --site monitoring ^
+  --user cmkadmin ^
+  --password "ChangeMe123!" ^
+  --hostname "IN-OT-HYPERV02"
+```
+or save it as .bat file, and then run it as Administrator.
+
+### Linux Agent Registration
+
+Run in terminal with `sudo`:
+
+```bash
+sudo cmk-agent-ctl register \
+  --server "in-ot-agent.avgol.com" \
+  --site "monitoring" \
+  --user "cmkadmin" \
+  --password "ChangeMe123!" \
+  --hostname "IN-OT-Monitoring"
+```
+
+> [!TIP]
+> When prompted to accept the server's certificate / fingerprint, confirm with `y` (yes). The connection will be established with mutual TLS authentication.
+
+---
+
+## Traefik Dynamic Configurations Explained
+
+Traefik watches the `traefik/dynamic/` directory. Any change made to `.yaml` files in this folder is **instantly applied without restarting containers**.
+
+### 1. Checkmk Routing (`traefik/dynamic/in-ot-monitoring.avgol.com.yaml`)
+Handles Layer 7 HTTPS routing for the Web UI, Layer 4 TCP proxying for the Agent Receiver, and Layer 4 UDP proxying for SNMP/Syslog:
 
 ```yaml
+# HTTP / HTTPS (Web UI)
 http:
   routers:
     ot-monitoring:
@@ -67,101 +168,50 @@ http:
         - websecure
       service: ot-monitoring-service
       tls: {}
-
   services:
     ot-monitoring-service:
       loadBalancer:
         servers:
           - url: "http://checkmk:5000"
+
+# TCP (Agent Receiver)
+tcp:
+  routers:
+    agent-receiver:
+      rule: HostSNI(`*`)
+      entryPoints:
+        - agent-receiver
+      service: agent-receiver-service
+  services:
+    agent-receiver-service:
+      loadBalancer:
+        servers:
+          - address: "checkmk:8000"
+
+# UDP (SNMP Traps & Syslog)
+udp:
+  routers:
+    snmp-trap:
+      entryPoints:
+        - snmp-trap
+      service: snmp-trap-service
+    syslog:
+      entryPoints:
+        - syslog
+      service: syslog-service
+  services:
+    snmp-trap-service:
+      loadBalancer:
+        servers:
+          - address: "checkmk:162"
+    syslog-service:
+      loadBalancer:
+        servers:
+          - address: "checkmk:514"
 ```
 
-## Configuration
-
-| Environment Variable | Purpose |
-|---|---|
-| `TZ` | Container timezone |
-| `CMK_PASSWORD` | Initial `cmkadmin` password; change this |
-| `CMK_SITE_ID` | Name of the Checkmk monitoring site |
-| `MAIL_RELAY_HOST` | Optional, unauthenticated SMTP smarthost for outbound mail. Commented out by default. Not usable with providers that require authentication, such as Office 365. |
-
-### Email Notifications With Authenticated SMTP
-
-There is no environment variable for authenticated mail relay in this image. Instead, configure it directly in the Checkmk Web UI, where the HTML Email notification method supports a smarthost with authentication and STARTTLS:
-
-`Setup > Events > Notifications > Parameters for notification methods > HTML Email`
-
-Enter the smarthost (`smtp.office365.com`, port `587`, STARTTLS), enable authentication, and provide the sending mailbox's credentials. Microsoft disables SMTP AUTH on mailboxes by default; it must be explicitly enabled for the sending account in the Microsoft 365 admin center before this will work.
-
-## Ports
-
-| Port | Protocol | Purpose | Exposed via |
-|---|---|---|---|
-| 443 | TCP | Checkmk Web UI (HTTPS) / Traefik UI | Traefik |
-| 80 | TCP | HTTP redirect to HTTPS | Traefik |
-| 8080 | TCP | Traefik Web UI / Dashboard | Traefik |
-| 8000 | TCP | Agent Receiver | Direct host port |
-| 162 | UDP | SNMP Trap receiver | Direct host port |
-| 514 | UDP | Syslog receiver | Direct host port |
-
-The Checkmk server also initiates outbound connections to agents on TCP `6556`; it does not listen on that port itself.
-
-## Traefik Configuration
-
-Traefik uses file-based static configuration in `traefik/traefik.yaml` mounted to `/etc/traefik/traefik.yaml`:
-
-```yaml
-global:
-  checkNewVersion: false
-  sendAnonymousUsage: false
-
-log:
-  level: INFO
-
-api:
-  dashboard: true
-  insecure: true
-
-entryPoints:
-  web:
-    address: ":80"
-    http:
-      redirections:
-        entryPoint:
-          to: websecure
-          scheme: https
-  websecure:
-    address: ":443"
-  traefik:
-    address: ":8080"
-
-providers:
-  docker:
-    exposedByDefault: false
-  file:
-    directory: /etc/traefik/dynamic
-    watch: true
-```
-
-The Traefik Dashboard Web UI can be accessed at:
-- `http://in-ot-proxy.avgol.com:8080/dashboard/` (or `http://localhost:8080/dashboard/`)
-- `https://in-ot-proxy.avgol.com/dashboard/` (via HTTPS TLS on port 443)
-
-## Local TLS Certificate & Dynamic Configs
-
-Dynamic configurations live inside `traefik/dynamic/`:
-
-```text
-traefik/
-├── certs/
-│   ├── wildcard_.avgol.com.crt
-│   └── wildcard_.avgol.com.key
-├── dynamic/
-│   ├── tls.yaml
-│   └── in-ot-monitoring.avgol.com.yaml
-└── traefik.yaml
-```
-
-Traefik loads TLS certificates and proxy dashboard config from `traefik/dynamic/tls.yaml`:
+### 2. TLS & Dashboard Routing (`traefik/dynamic/tls.yaml`)
+Loads the wildcard `*.avgol.com` certificate and exposes the Traefik Dashboard over HTTPS:
 
 ```yaml
 tls:
@@ -188,89 +238,44 @@ http:
         permanent: true
 ```
 
-The corresponding local certificate files live in `traefik/certs/`:
+---
 
-```text
-traefik/certs/
-├── wildcard_.avgol.com.crt
-└── wildcard_.avgol.com.key
-```
+## Adding Future Services
+To add another service or website in the future (e.g. Grafana, OPC-UA gateway, Node-RED):
+1. Add the container to `docker-compose.yaml` (no port publishing needed if routing through Traefik).
+2. Create a new `.yaml` file inside `traefik/dynamic/` (e.g. `traefik/dynamic/grafana.avgol.com.yaml`).
+3. Define the router and service pointing to `http://<container_name>:<port>`.
+4. Traefik immediately serves the new domain with zero downtime!
 
-These files are local secrets and are ignored by git. The helper script generates a fresh `*.avgol.com` certificate signed by the existing local Caddy root CA:
+---
 
-```powershell
-python .\scripts\generate-traefik-cert.py
-```
+## Offline Deployment Bundle
 
-The existing root CA certificate remains here:
+To deploy to an isolated or air-gapped production host:
 
-```text
-caddy_cert/caddy/pki/authorities/local/root.crt
-```
+1. Pull images locally:
+   ```bash
+   docker compose pull
+   ```
+2. Run the bundle script:
+   ```bash
+   ./bundle-and-transfer.sh
+   ```
+3. Connect to the remote server and deploy:
+   ```bash
+   ssh chetan@<SERVER_IP>
+   cd /home/chetan/OT-Monitoring
+   ./deploy-on-server.sh
+   ```
 
-If that root certificate is already trusted by Windows, Chrome and Edge should trust the Traefik certificate generated by the script. To install it for the first time:
-
-1. Open `caddy_cert\caddy\pki\authorities\local\`.
-2. Double-click `root.crt`, or right-click and choose **Install Certificate**.
-3. Select **Local Machine** or **Current User**.
-4. Select **Place all certificates in the following store**.
-5. Choose **Trusted Root Certification Authorities**.
-6. Finish the wizard and restart Chrome or Edge.
-
-When testing with Windows `curl.exe`, local CA certificates can fail revocation checking even when the chain is otherwise trusted. Use `--ssl-no-revoke` for that local check:
-
-```powershell
-curl.exe --ssl-no-revoke https://IN-OT-Monitoring.avgol.com/monitoring/check_mk/login.py
-```
-
-## Offline Bundle
-
-`bundle-and-transfer.sh` copies:
-
-- `docker-compose.yaml`
-- `deploy-on-server.sh`
-- `traefik/` (includes static config, dynamic files, and certificates)
-
-Before creating the bundle, make sure the images are available locally:
-
-```bash
-docker compose pull
-```
-
-The deployment script verifies these required files before starting Docker Compose:
-
-- `traefik/traefik.yaml`
-- `traefik/dynamic/tls.yaml`
-- `traefik/dynamic/in-ot-monitoring.avgol.com.yaml`
-- `traefik/certs/wildcard_.avgol.com.crt`
-- `traefik/certs/wildcard_.avgol.com.key`
-
-## Data Persistence
-
-Checkmk site data is stored in `./checkmk_data`. Backup files are stored in `./backup-files`. Traefik TLS material is stored in `./traefik/certs`.
+---
 
 ## Security Notes
 
-- Change `CMK_PASSWORD` before deploying to anything reachable beyond your own machine.
+- Change `CMK_PASSWORD` before deploying to production.
 - Keep `traefik/certs/*.key` private.
-- Restrict inbound access to `8000/tcp`, `162/udp`, and `514/udp` to only the networks your agents and devices live on.
-- The Docker socket is mounted read-only into Traefik so it can discover labeled containers. Do not enable routing labels on containers you do not intend to expose.
-
-## Third-Party Notices
-
-This repository contains only original orchestration/configuration files; no third-party source code is included or redistributed here. At runtime, Docker Compose pulls the following pre-built, publicly published images:
-
-| Component | License | Source |
-|---|---|---|
-| [Checkmk Raw / Community Edition](https://github.com/Checkmk/checkmk) | GPL-2.0 | [checkmk/check-mk-raw](https://hub.docker.com/r/checkmk/check-mk-raw) on Docker Hub |
-| [Traefik](https://github.com/traefik/traefik) | MIT | [traefik](https://hub.docker.com/_/traefik) on Docker Hub |
-| [Postfix relay image](https://hub.docker.com/r/boky/postfix) | See upstream image | [boky/postfix](https://hub.docker.com/r/boky/postfix) on Docker Hub |
-
-Using these images to deploy the stack does not modify or redistribute their source code, so it does not trigger GPL-2.0's copyleft obligations for this repository's own files. If you fork, modify, or redistribute Checkmk's own source code, those obligations apply to you independently of this project's license.
-
-## License
-
-Licensed under the [MIT License](LICENSE) if one is added to this repository. This covers the original orchestration/configuration files. It does not apply to Checkmk, Traefik, or the Postfix relay image.
+- Restrict firewall access to ports `8000/tcp`, `162/udp`, and `514/udp` to only internal OT/monitoring networks.
+- Traefik runs with `exposedByDefault: false` to ensure unconfigured containers are never exposed unintentionally.
 
 ---
 
