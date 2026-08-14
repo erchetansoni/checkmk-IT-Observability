@@ -1,0 +1,14 @@
+http:
+  routers:
+    ot-monitoring:
+      rule: Host(`in-ot-monitoring.avgol.com`)
+      entryPoints:
+        - websecure
+      service: ot-monitoring-service
+      tls: {}
+
+  services:
+    ot-monitoring-service:
+      loadBalancer:
+        servers:
+          - url: "http://checkmk:5000"

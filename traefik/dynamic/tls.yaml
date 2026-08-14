@@ -20,5 +20,3 @@ http:
         regex: "^https://in-ot-proxy\\.avgol\\.com/$"
         replacement: "https://in-ot-proxy.avgol.com/dashboard/"
         permanent: true
-
-

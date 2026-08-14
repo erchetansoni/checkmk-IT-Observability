@@ -51,7 +51,8 @@ DIRS_TO_COPY=(
 
 REQUIRED_FILES=(
     "traefik/traefik.yaml"
-    "traefik/tls.yaml"
+    "traefik/dynamic/tls.yaml"
+    "traefik/dynamic/in-ot-monitoring.avgol.com.yaml"
     "traefik/certs/wildcard_.avgol.com.crt"
     "traefik/certs/wildcard_.avgol.com.key"
 )

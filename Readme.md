@@ -54,18 +54,26 @@ Host names are case-insensitive. The Traefik rule in `docker-compose.yaml` uses 
 
 ## Traefik Routing
 
-Traefik discovers the Checkmk web UI from Docker labels on the `checkmk` service:
+Traefik uses dynamic configuration files loaded from `traefik/dynamic/` (hot-reloaded automatically).
+
+The Checkmk service is defined in `traefik/dynamic/in-ot-monitoring.avgol.com.yaml`:
 
 ```yaml
-labels:
-  - "traefik.enable=true"
-  - "traefik.http.routers.ot-monitoring.rule=Host(`in-ot-monitoring.avgol.com`)"
-  - "traefik.http.routers.ot-monitoring.entrypoints=websecure"
-  - "traefik.http.routers.ot-monitoring.tls=true"
-  - "traefik.http.services.ot-monitoring.loadbalancer.server.port=5000"
-```
+http:
+  routers:
+    ot-monitoring:
+      rule: Host(`in-ot-monitoring.avgol.com`)
+      entryPoints:
+        - websecure
+      service: ot-monitoring-service
+      tls: {}
 
-The `traefik` service has `exposedbydefault=false`, so only containers with `traefik.enable=true` are published.
+  services:
+    ot-monitoring-service:
+      loadBalancer:
+        servers:
+          - url: "http://checkmk:5000"
+```
 
 ## Configuration
 
@@ -130,7 +138,7 @@ providers:
   docker:
     exposedByDefault: false
   file:
-    filename: /etc/traefik/dynamic/tls.yaml
+    directory: /etc/traefik/dynamic
     watch: true
 ```
 
@@ -138,9 +146,22 @@ The Traefik Dashboard Web UI can be accessed at:
 - `http://in-ot-proxy.avgol.com:8080/dashboard/` (or `http://localhost:8080/dashboard/`)
 - `https://in-ot-proxy.avgol.com/dashboard/` (via HTTPS TLS on port 443)
 
-## Local TLS Certificate
+## Local TLS Certificate & Dynamic Configs
 
-Traefik uses the file provider config in `traefik/tls.yaml`:
+Dynamic configurations live inside `traefik/dynamic/`:
+
+```text
+traefik/
+├── certs/
+│   ├── wildcard_.avgol.com.crt
+│   └── wildcard_.avgol.com.key
+├── dynamic/
+│   ├── tls.yaml
+│   └── in-ot-monitoring.avgol.com.yaml
+└── traefik.yaml
+```
+
+Traefik loads TLS certificates and proxy dashboard config from `traefik/dynamic/tls.yaml`:
 
 ```yaml
 tls:
@@ -204,11 +225,11 @@ curl.exe --ssl-no-revoke https://IN-OT-Monitoring.avgol.com/monitoring/check_mk/
 
 ## Offline Bundle
 
-`bundle-and-transfer.sh` now copies:
+`bundle-and-transfer.sh` copies:
 
 - `docker-compose.yaml`
 - `deploy-on-server.sh`
-- `traefik/`
+- `traefik/` (includes static config, dynamic files, and certificates)
 
 Before creating the bundle, make sure the images are available locally:
 
@@ -216,10 +237,11 @@ Before creating the bundle, make sure the images are available locally:
 docker compose pull
 ```
 
-The deployment script verifies these required bind-mounted files before starting Docker Compose:
+The deployment script verifies these required files before starting Docker Compose:
 
 - `traefik/traefik.yaml`
-- `traefik/tls.yaml`
+- `traefik/dynamic/tls.yaml`
+- `traefik/dynamic/in-ot-monitoring.avgol.com.yaml`
 - `traefik/certs/wildcard_.avgol.com.crt`
 - `traefik/certs/wildcard_.avgol.com.key`
 

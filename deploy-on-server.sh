@@ -16,7 +16,8 @@ COMPOSE_FILE="docker-compose.yaml"
 # and the container would silently run with default config.
 REQUIRED_FILES=(
     "traefik/traefik.yaml"
-    "traefik/tls.yaml"
+    "traefik/dynamic/tls.yaml"
+    "traefik/dynamic/in-ot-monitoring.avgol.com.yaml"
     "traefik/certs/wildcard_.avgol.com.crt"
     "traefik/certs/wildcard_.avgol.com.key"
 )

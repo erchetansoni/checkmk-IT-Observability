@@ -42,13 +42,6 @@ services:
       # Setup > Events > Notifications > Parameters for notification methods > HTML Email
       # - MAIL_RELAY_HOST=mailrelay.example.com
       
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.ot-monitoring.rule=Host(`in-ot-monitoring.avgol.com`)"
-      - "traefik.http.routers.ot-monitoring.entrypoints=websecure"
-      - "traefik.http.routers.ot-monitoring.tls=true"
-      - "traefik.http.services.ot-monitoring.loadbalancer.server.port=5000"
-
     healthcheck:
       test: ["CMD", "curl", "-fsS", "--max-time", "10", "http://127.0.0.1:5000/monitoring/"]
       interval: 30s
@@ -76,13 +69,12 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./traefik/traefik.yaml:/etc/traefik/traefik.yaml:ro
-      - ./traefik/tls.yaml:/etc/traefik/dynamic/tls.yaml:ro
+      - ./traefik/dynamic:/etc/traefik/dynamic:ro
       - ./traefik/certs:/certs:ro
     
     depends_on:
       checkmk:
         condition: service_healthy
-    
     logging:
       driver: json-file
       options:
