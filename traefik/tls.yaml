@@ -1,4 +1,0 @@
-tls:
-  certificates:
-    - certFile: /certs/wildcard_.avgol.com.crt
-      keyFile: /certs/wildcard_.avgol.com.key
