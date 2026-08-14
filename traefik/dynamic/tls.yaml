@@ -1,8 +1,23 @@
+# tls:: The TLS/SSL section where certificate management is defined.
+# certificates:: A list of SSL certificates to be loaded by Traefik.
+# certFile: /certs/wildcard_.avgol.com.crt: Specifies the path to the public key certificate file (usually containing the full chain).
+# keyFile: /certs/wildcard_.avgol.com.key: Specifies the path to the private key file.
+# The wildcard certificate `*.avgol.com` allows secure connections for multiple subdomains (e.g., in-ot-proxy.avgol.com, opc-ua-proxy.avgol.com, etc.).
+
 tls:
   certificates:
     - certFile: /certs/wildcard_.avgol.com.crt
       keyFile: /certs/wildcard_.avgol.com.key
 
+# http:: The main section where HTTP-related routing, Internal Services and middleware configurations are defined.
+# routers:: List of inbound traffic routers.
+# traefik-dashboard:: The unique name given to this specific router.
+# rule: Host(`in-ot-proxy.avgol.com`): This is the matching rule.
+# Host(...): A router rule that matches requests based on the Host header.
+# `in-ot-proxy.avgol.com`: Traefik will only apply this rule to requests where the Host header is exactly `in-ot-proxy.avgol.com`.
+# entryPoints:: A list of entry points (defined in traefik.yaml) that this router should listen on.
+# [websecure]: This router will only be active on the `websecure` entry point (which is configured for port 443/HTTPS).
+# tls: {}: Enables HTTPS encryption for this router using the available certificates.
 http:
   routers:
     traefik-dashboard:
@@ -14,6 +29,14 @@ http:
         - dashboard-redirect
       tls: {}
 
+  # middlewares:: Defines reusable components that can be applied to routers.
+  # dashboard-redirect:: The unique name of this middleware.
+  # redirectRegex:: Uses regular expressions to match and rewrite incoming URLs.
+  # regex: "^https://in-ot-proxy\\.avgol\\.com/$": This is the pattern Traefik looks for at the start of the URL.
+  # ^: Matches the start of the string.
+  # https://in-ot-proxy\\.avgol\\.com/$: Matches the exact base URL "https://in-ot-proxy.avgol.com/" (the "\\." is used to escape the dots so they are treated as literal characters, not regex wildcards).
+  # replacement: "https://in-ot-proxy.avgol.com/dashboard/": If the pattern matches, Traefik replaces the matched string with this new string, effectively adding "/dashboard/" to the URL.
+  # permanent: true: Sets the HTTP status code to 301 (Moved Permanently), which is the standard for permanent redirects (browser will cache the redirect).
   middlewares:
     dashboard-redirect:
       redirectRegex:
